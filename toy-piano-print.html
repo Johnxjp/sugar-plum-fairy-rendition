@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sugar Plum Keyboard</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #F2EDE3; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: pointer; }
+  #play {
+    position: fixed; top: 44px; right: 52px;
+    padding: 8px 20px 8px 16px;
+    font: 600 16px ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+    color: #2E3192; background: #F2EDE3;
+    border: 2px solid #2E3192; border-radius: 999px;
+    /* An offset pink edge, like a plate printed slightly out of register. */
+    box-shadow: 3px 3px 0 #FF48B0;
+    cursor: pointer;
+  }
+  #play:hover { background: #fbe3ef; }
+  #play:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #FF48B0; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="play" type="button">▶ Play</button>
+<script>
+/* Risograph-style print of the toy keyboard and the Sugar Plum tutorial page.
+   Method adapted from sevenevesai/riso-windowseat: every shape is drawn once per
+   ink as a coverage layer (alpha = tone), screened into halftone dots, tinted,
+   offset by that ink's registration error and multiplied onto paper. */
+
+const PAPER = '#F2EDE3';
+const INK = {
+  yellow: '#FFE800', orange: '#FF6C2F', red: '#F15060', pink: '#FF48B0',
+  green: '#00A95C', blue: '#0078BF', violet: '#765BA7', indigo: '#2E3192',
+};
+// Rational tangents (b/a): any other angle leaves a seam where the tile wraps.
+const SCREEN = {
+  yellow: [1, 0], orange: [2, 1], red: [1, 2], pink: [1, 4],
+  green: [1, 1], blue: [4, 1], violet: [1, 2], indigo: [1, 1],
+};
+const REG = {
+  yellow: [2, 1.5], orange: [1, 2], red: [-1, 1], pink: [-2, 1.5],
+  green: [-1.5, -1.5], blue: [1.5, -1], violet: [-1.5, -1], indigo: [0, 0],
+};
+
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+const PITCH = 3.6 * DPR;
+
+// Toy pitches measured from the recording; the two plain black keys are silent.
+const WHITE_KEYS = [
+  { hz: 527.6, shape: 'dot', color: 'red' },
+  { hz: 590.8, shape: 'dot', color: 'orange' },
+  { hz: 664.2, shape: 'dot', color: 'yellow' },
+  { hz: 702.5, shape: 'dot', color: 'green' },
+  { hz: 790.0, shape: 'dot', color: 'lblue' },
+  { hz: 886.9, shape: 'dot', color: 'pink' },
+  { hz: 997.9, shape: 'dot', color: 'purple' },
+  { hz: 1056.5, shape: 'star', color: 'red' },
+  { hz: 1189.7, shape: 'star', color: 'orange' },
+];
+const BLACK_KEYS = [
+  { after: 0, hz: null },
+  { after: 1, hz: null },
+  { after: 3, hz: 744.2, shape: 'tri', color: 'green' },
+  { after: 4, hz: 837.1, shape: 'tri', color: 'lblue' },
+  { after: 5, hz: 939.4, shape: 'tri', color: 'purple' },
+  { after: 7, hz: 1115.7, shape: 'square', color: 'red' },
+];
+const WHITE_MIDI = [72, 74, 76, 77, 79, 81, 83, 84, 86];
+
+// The toy arrangement from the intro to line 8 at the score's quarter = 70:
+// [start s, length s, midi]. Generated from the MusicXML, not typed by hand.
+const SONG = [[0.429,0.429,81],[1.286,0.429,83],[2.143,0.429,84],[3.0,0.429,80],[3.857,0.429,81],[4.714,0.429,83],[5.571,0.429,84],[6.429,0.429,80],[7.286,0.214,84],[7.5,0.214,81],[7.714,0.429,84],[8.143,0.429,83],[8.571,0.429,80],[9.0,0.429,81],[9.429,0.214,79],[9.643,0.214,79],[9.857,0.429,79],[10.286,0.214,78],[10.5,0.214,78],[10.714,0.429,78],[11.143,0.214,77],[11.357,0.214,77],[11.571,0.429,77],[12.0,0.214,76],[12.214,0.214,81],[12.429,0.214,77],[12.643,0.214,81],[12.857,0.429,76],[14.143,0.214,84],[14.357,0.214,81],[14.571,0.429,84],[15.0,0.429,83],[15.429,0.429,77],[15.857,0.429,76],[16.286,0.214,84],[16.5,0.214,84],[16.714,0.429,84],[17.143,0.214,83],[17.357,0.214,83],[17.571,0.429,83],[18.0,0.214,81],[18.214,0.214,81],[18.429,0.429,81],[18.857,0.214,80],[19.071,0.214,83],[19.286,0.214,81],[19.5,0.214,83],[19.714,0.429,80],[21.0,0.214,84],[21.214,0.214,81],[21.429,0.429,84],[21.857,0.429,83],[22.286,0.429,80],[22.714,0.429,81],[23.143,0.214,79],[23.357,0.214,79],[23.571,0.429,79],[24.0,0.214,78],[24.214,0.214,78],[24.429,0.429,78],[24.857,0.214,77],[25.071,0.214,77],[25.286,0.429,77],[25.714,0.214,76],[25.929,0.214,81],[26.143,0.214,77],[26.357,0.214,81],[26.571,0.429,76],[27.857,0.214,81],[28.071,0.214,78],[28.286,0.429,81],[28.714,0.429,80],[29.571,0.214,79],[29.786,0.214,76],[30.0,0.429,79],[30.429,0.429,78],[31.286,0.214,77],[31.5,0.214,74],[31.714,0.429,77],[32.143,0.429,76],[33.0,0.107,76],[33.107,0.107,80],[33.214,0.107,83],[33.429,0.429,81]];
+
+const STICKER = {
+  red: { red: 1 }, orange: { orange: 1 }, yellow: { yellow: 1 }, green: { green: 1 },
+  lblue: { blue: 0.55 }, pink: { pink: 1 }, purple: { violet: 1 },
+};
+
+// The book's two lines: [midi, shape, colour, lyric].
+const LINE1 = [
+  [84, 'star', 'red', 'See'], [81, 'dot', 'pink', 'the'], [84, 'star', 'red', 'fai-'],
+  [83, 'dot', 'purple', 'ry'], [80, 'tri', 'lblue', 'of'], [81, 'dot', 'pink', 'the'],
+  [79, 'dot', 'lblue', 'su-'], [79, 'dot', 'lblue', 'gar'], [79, 'dot', 'lblue', 'plum,'],
+];
+const LINE2 = [
+  [78, 'tri', 'green', 'su-'], [78, 'tri', 'green', 'gar'], [78, 'tri', 'green', 'plum,'],
+  [77, 'dot', 'green', 'su-'], [77, 'dot', 'green', 'gar'], [77, 'dot', 'green', 'plum,'],
+  [76, 'dot', 'yellow', 'danc-'], [81, 'dot', 'pink', 'ing'], [77, 'dot', 'green', 'all'],
+  [81, 'dot', 'pink', 'ar-'], [76, 'dot', 'yellow', 'round.'],
+];
+
+const FONT = 'ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif';
+const DARK = { indigo: 1, violet: 0.8, orange: 0.5 };      // no pure black ink: darks are overprints
+const TEXT = { indigo: 0.95, violet: 0.4 };
+const SKIN = { orange: 1, violet: 0.45 };
+
+function mulberry32(a) {
+  return () => {
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+const rngFor = (key) => mulberry32(hash(key));
+
+function cv(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+const screens = {};
+function screenOf(name) {
+  if (screens[name]) return screens[name];
+  const [a, b] = SCREEN[name];
+  const n = a * a + b * b;
+  const S = Math.max(2, Math.round(PITCH * Math.sqrt(n)));
+  const P = S / Math.sqrt(n);
+  const u = P / Math.sqrt(n);
+  const pts = [];
+  for (let m = -n; m <= n; m++) {
+    for (let k = -n; k <= n; k++) {
+      const x = m * u * a - k * u * b, y = m * u * b + k * u * a;
+      const wx = ((x % S) + S) % S, wy = ((y % S) + S) % S;
+      for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) pts.push([wx + dx, wy + dy]);
+    }
+  }
+  const th = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      let d2 = Infinity;
+      for (const [px, py] of pts) {
+        const q = (x + 0.5 - px) ** 2 + (y + 0.5 - py) ** 2;
+        if (q < d2) d2 = q;
+      }
+      th[y * S + x] = Math.min(1, Math.PI * d2 / (P * P));
+    }
+  }
+  return (screens[name] = { S, th });
+}
+
+function screenPlate(cover, name, ox = 0, oy = 0) {
+  const { S, th } = screenOf(name);
+  const w = cover.width, h = cover.height;
+  const img = cover.getContext('2d').getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let y = 0; y < h; y++) {
+    const row = ((y + oy) % S) * S;
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4 + 3;
+      const c = d[i] / 255;
+      // Full coverage prints solid; the tile alone would leave interstices
+      // open and break text and outlines into dots.
+      d[i] = c > 0.985 || c > th[row + ((x + ox) % S)] ? 255 : 0;
+    }
+  }
+  cover.getContext('2d').putImageData(img, 0, 0);
+  return cover;
+}
+
+function paintPaper(o, w, h) {
+  const r = rngFor('paper');
+  o.fillStyle = PAPER;
+  o.fillRect(0, 0, w, h);
+  for (const [res, maxA] of [[24, 0.10], [60, 0.07], [140, 0.05]]) {
+    const rw = res, rh = Math.max(2, Math.round(res * h / w));
+    const n = cv(rw, rh), nx = n.getContext('2d');
+    const img = nx.createImageData(rw, rh);
+    for (let i = 0; i < rw * rh; i++) {
+      img.data[i * 4] = 0xB4; img.data[i * 4 + 1] = 0xA6; img.data[i * 4 + 2] = 0x8C;
+      img.data[i * 4 + 3] = Math.pow(r(), 1.8) * 255 * maxA;
+    }
+    nx.putImageData(img, 0, 0);
+    o.imageSmoothingEnabled = true;
+    o.imageSmoothingQuality = 'high';
+    o.drawImage(n, 0, 0, w, h);
+  }
+  for (let i = 0; i < w * h / 900; i++) {
+    o.globalAlpha = 0.012 + r() * 0.03;
+    o.fillStyle = r() < 0.55 ? '#7d7362' : '#ffffff';
+    o.beginPath();
+    o.arc(r() * w, r() * h, (0.4 + r()) * DPR, 0, Math.PI * 2);
+    o.fill();
+  }
+  o.globalAlpha = 1;
+}
+
+// Evenly filled solids read as laser print, so drop flecks of ink.
+function starve(g, rng) {
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'destination-out';
+  const w = g.canvas.width, h = g.canvas.height;
+  for (let i = 0; i < w * h / 2200; i++) {
+    g.globalAlpha = 0.2 + rng() * 0.55;
+    g.beginPath();
+    g.arc(rng() * w, rng() * h, (0.5 + rng() * 1.6) * DPR, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+}
+
+/* ── shapes ─────────────────────────────────────────────────────────────── */
+
+function wobbly(cx, cy, rx, ry, rng, rot = 0, amt = 0.025) {
+  const p = new Path2D();
+  const ph = [rng() * 6.28, rng() * 6.28, rng() * 6.28];
+  for (let i = 0; i <= 64; i++) {
+    const t = i / 64 * Math.PI * 2;
+    const k = 1 + amt * (Math.sin(2 * t + ph[0]) + 0.6 * Math.sin(3 * t + ph[1]) + 0.3 * Math.sin(5 * t + ph[2]));
+    const x = Math.cos(t) * rx * k, y = Math.sin(t) * ry * k;
+    const px = cx + x * Math.cos(rot) - y * Math.sin(rot);
+    const py = cy + x * Math.sin(rot) + y * Math.cos(rot);
+    i ? p.lineTo(px, py) : p.moveTo(px, py);
+  }
+  p.closePath();
+  return p;
+}
+
+function roundedPoly(pts, r) {
+  const p = new Path2D();
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const [x0, y0] = pts[(i - 1 + n) % n], [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % n];
+    const a = Math.hypot(x0 - x1, y0 - y1), b = Math.hypot(x2 - x1, y2 - y1);
+    const s = Math.min(r, a / 2, b / 2);
+    const ax = x1 + (x0 - x1) / a * s, ay = y1 + (y0 - y1) / a * s;
+    const bx = x1 + (x2 - x1) / b * s, by = y1 + (y2 - y1) / b * s;
+    i ? p.lineTo(ax, ay) : p.moveTo(ax, ay);
+    p.quadraticCurveTo(x1, y1, bx, by);
+  }
+  p.closePath();
+  return p;
+}
+
+function star(cx, cy, r) {
+  const pts = [];
+  for (let i = 0; i < 10; i++) {
+    const t = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.47 : r;
+    pts.push([cx + Math.cos(t) * rr, cy + Math.sin(t) * rr]);
+  }
+  return roundedPoly(pts, r * 0.09);
+}
+
+function tri(cx, cy, s) {
+  const h = s * 0.9;
+  return roundedPoly([[cx, cy - h * 0.55], [cx + s / 2, cy + h * 0.45], [cx - s / 2, cy + h * 0.45]], s * 0.14);
+}
+
+function rrect(x, y, w, h, r) {
+  const p = new Path2D();
+  p.roundRect(x, y, w, h, r);
+  return p;
+}
+
+function line(pts) {
+  const p = new Path2D();
+  p.moveTo(...pts[0]);
+  if (pts.length === 3) p.quadraticCurveTo(...pts[1], ...pts[2]);
+  else for (const q of pts.slice(1)) p.lineTo(...q);
+  return p;
+}
+
+/* ── the picture as an ordered list of layers ───────────────────────────────
+   Each layer clears everything beneath it on every plate, then prints its own
+   inks, so it owns its colour exactly. Shadows and glows pass knock: false and
+   darken whatever is under them instead.                                    */
+
+function sticker(layers, shape, color, cx, cy, size, rng) {
+  const path = shape === 'star' ? star(cx, cy, size * 1.1)
+    : shape === 'tri' ? tri(cx, cy, size * 1.5)
+    : shape === 'square' ? rrect(cx - size * 0.62, cy - size * 0.62, size * 1.24, size * 1.24, size * 0.28)
+    : wobbly(cx, cy, size, size, rng, 0, 0.012);
+  layers.push({ path, ink: { indigo: 0.3 }, knock: false, blur: size * 0.12, dx: size * 0.1, dy: size * 0.16 });
+  layers.push({ path, ink: STICKER[color] });
+  // The stickers are glossy domes: a soft highlight up and to the left,
+  // clipped so it can't punch through whatever the sticker sits on.
+  const [hx, hy] = shape === 'tri' ? [-0.15, 0.12] : [-0.32, -0.36];
+  layers.push({
+    path: wobbly(cx + hx * size, cy + hy * size, size * 0.24, size * 0.12, rng, -0.6, 0.05),
+    ink: {}, knockAlpha: 0.75, clip: path,
+  });
+}
+
+function fairy(layers, x0, y0, s, rng) {
+  const P = (x, y) => [x0 + x * s, y0 + y * s];
+  const E = (x, y, rx, ry, rot = 0) => wobbly(...P(x, y), rx * s, ry * s, rng, rot, 0.03);
+  const glow = {
+    path: E(0.56, 0.48, 0.46, 0.44), ink: { yellow: 1 }, knock: false,
+    grad: (g) => {
+      const [cx, cy] = P(0.56, 0.48);
+      const gr = g.createRadialGradient(cx, cy, s * 0.05, cx, cy, s * 0.46);
+      gr.addColorStop(0, 'rgba(0,0,0,0.85)');
+      gr.addColorStop(0.55, 'rgba(0,0,0,0.45)');
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      return gr;
+    },
+  };
+  layers.push(glow);
+  const limb = (pts, w) => ({ path: line(pts.map((q) => P(...q))), ink: SKIN, stroke: w * s });
+  layers.push(limb([[0.53, 0.55], [0.3, 0.49], [0.1, 0.46]], 0.05));     // leg stretched back
+  layers.push(limb([[0.6, 0.55], [0.62, 0.75], [0.64, 0.92]], 0.052));    // standing leg
+  layers.push({ path: E(0.085, 0.455, 0.035, 0.018, -0.2), ink: { red: 1 } });
+  layers.push({ path: E(0.645, 0.935, 0.02, 0.03), ink: { red: 1 } });
+  layers.push(limb([[0.56, 0.32], [0.72, 0.4], [0.88, 0.36]], 0.034));    // arm out to the side
+  // Tutu: white net underneath, violet skirt on top with white dots.
+  layers.push({ path: E(0.56, 0.555, 0.31, 0.095, -0.18), ink: {} });
+  layers.push({ path: E(0.56, 0.555, 0.31, 0.095, -0.18), ink: { indigo: 0.4 }, stroke: 1.2, knock: false });
+  for (let i = 0; i < 9; i++) {
+    const t = i / 8;
+    const [px, py] = P(0.28 + t * 0.56, 0.6 - t * 0.1);
+    layers.push({ path: line([[px, py], [px + (rng() - 0.5) * s * 0.03, py + s * 0.04]]), ink: { indigo: 0.3 }, stroke: 1, knock: false });
+  }
+  layers.push({ path: E(0.56, 0.52, 0.27, 0.07, -0.18), ink: { violet: 1, pink: 0.35 } });
+  for (let i = 0; i < 14; i++) {
+    const t = rng() * Math.PI * 2, rr = Math.sqrt(rng()) * 0.8;
+    const dx = Math.cos(t) * rr * 0.25, dy = Math.sin(t) * rr * 0.055;
+    const [px, py] = P(0.56 + dx * Math.cos(-0.18) - dy * Math.sin(-0.18), 0.52 + dx * Math.sin(-0.18) + dy * Math.cos(-0.18));
+    layers.push({ path: wobbly(px, py, s * 0.009, s * 0.009, rng), ink: {} });
+  }
+  // Bodice, then neck, head, white hair, and the raised arm last.
+  layers.push({ path: roundedPoly([P(0.53, 0.3), P(0.67, 0.28), P(0.64, 0.5), P(0.53, 0.51)], s * 0.03), ink: { violet: 1, pink: 0.35 } });
+  layers.push({ path: line([P(0.6, 0.31), P(0.605, 0.24)]), ink: SKIN, stroke: 0.03 * s });
+  layers.push({ path: E(0.62, 0.2, 0.06, 0.066), ink: SKIN });
+  layers.push({ path: E(0.565, 0.15, 0.036, 0.032, -0.3), ink: {} });
+  layers.push({ path: E(0.565, 0.15, 0.036, 0.032, -0.3), ink: { indigo: 0.35 }, stroke: 1.2, knock: false });
+  layers.push(limb([[0.64, 0.31], [0.74, 0.2], [0.84, 0.07]], 0.034));
+  // A few petals drifting round her, as in the book.
+  const petal = [[0.2, 0.2, 'violet'], [0.3, 0.1, 'violet'], [0.9, 0.55, 'blue'], [0.12, 0.7, 'violet'], [0.78, 0.8, 'pink']];
+  for (const [px, py, ink] of petal) layers.push({ path: E(px, py, 0.02, 0.009, rng() * 3), ink: { [ink]: 0.9 } });
+}
+
+function notesCard(layers, card, heading, notes, rng, fairyBox) {
+  const { x, y, w, h } = card;
+  const pad = Math.min(w, h) * 0.07;
+  const fs = Math.max(11, Math.min(22, h * 0.07, w * 0.035));
+  layers.push({ path: rrect(x + 3, y + 5, w, h, 16), ink: { violet: 0.3, indigo: 0.12 }, knock: false });
+  layers.push({ path: rrect(x, y, w, h, 16), ink: { yellow: 0.05 } });
+  layers.push({ text: heading, x: x + pad, y: y + pad + fs, font: `600 ${fs * 1.05}px ${FONT}`, align: 'left', ink: TEXT });
+
+  let nx = x + pad, nw = w - pad * 2;
+  if (fairyBox) {
+    const s = Math.min(w * 0.36, h - pad * 1.6 - fs * 1.4);
+    fairy(layers, x + pad * 0.3, y + h - pad * 0.6 - s, s, rng);
+    nx += s * 0.95; nw -= s * 0.95;
+  }
+  const lyricY = y + h - pad;
+  const top = y + pad + fs * 2.2, bottom = lyricY - fs * 1.9;
+  const step = nw / notes.length;
+  const size = Math.min(step * 0.34, (bottom - top) * 0.16);
+  notes.forEach(([midi, shape, color, word], i) => {
+    const cx = nx + step * (i + 0.5);
+    // Higher notes sit higher on the page, as the book draws them.
+    const cy = bottom - size - (midi - 76) / 8 * (bottom - top - size * 2);
+    sticker(layers, shape, color, cx, cy, size, rng);
+    layers.push({ text: word, x: cx, y: lyricY, font: `500 ${fs}px ${FONT}`, ink: TEXT });
+  });
+}
+
+function keyboard(layers, k, rng, hits) {
+  const { x, y, w, h } = k;
+  const rim = Math.min(w, h) * 0.035;
+  layers.push({ path: rrect(x + 4, y + 10, w, h, 14), ink: { indigo: 0.3, violet: 0.2 }, knock: false, blur: 10 });
+  layers.push({ path: rrect(x, y, w, h, 14), ink: { blue: 0.05, indigo: 0.04 } });
+  // The book slides over the back of the keys; its dark edge caps the keyboard.
+  const back = h * 0.06;
+  layers.push({ path: rrect(x, y, w, back, [14, 14, 0, 0]), ink: DARK });
+  layers.push({ path: rrect(x, y + back - 3, w, 3, 0), ink: { indigo: 0.5 }, knock: false });
+
+  const kx = x + rim, ky = y + back, kw = w - rim * 2, kh = h - back - rim;
+  const ww = kw / 9;
+  layers.push({ path: rrect(kx, ky, kw, kh, [0, 0, 8, 8]), ink: {} });
+  layers.push({
+    path: rrect(kx, ky, kw, kh * 0.4, 0), ink: { blue: 0.22 }, knock: false,
+    grad: (g) => {
+      const gr = g.createLinearGradient(0, ky, 0, ky + kh * 0.4);
+      gr.addColorStop(0, 'rgba(0,0,0,0.7)');
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      return gr;
+    },
+  });
+  for (let i = 1; i < 9; i++) {
+    const lx = kx + i * ww;
+    layers.push({ path: line([[lx, ky], [lx, ky + kh]]), ink: { indigo: 0.45 }, stroke: 1.6, knock: false });
+  }
+  layers.push({ path: rrect(kx, ky + kh - 4, kw, 4, [0, 0, 8, 8]), ink: { indigo: 0.22, blue: 0.1 }, knock: false });
+
+  const bw = ww * 0.6, bh = kh * 0.56;
+  const blackPaths = BLACK_KEYS.map((b) => rrect(kx + (b.after + 1) * ww - bw / 2, ky, bw, bh, [0, 0, 5, 5]));
+  // A pressed key tips down at the front, so its shade deepens towards you.
+  const sinking = (y0, h0, a0) => (g) => {
+    const gr = g.createLinearGradient(0, y0, 0, y0 + h0);
+    gr.addColorStop(0, `rgba(0,0,0,${a0})`);
+    gr.addColorStop(1, 'rgba(0,0,0,1)');
+    return gr;
+  };
+
+  WHITE_KEYS.forEach((key, i) => {
+    const x0 = kx + i * ww;
+    const size = Math.min(ww * 0.3, kh * 0.075);
+    const cx = x0 + ww / 2, cy = ky + kh - size * 2.3;
+    hits.push({
+      x: x0, y: ky, w: ww, h: kh, hz: key.hz, midi: WHITE_MIDI[i], cx, cy, size, color: key.color,
+      shade: [
+        { path: rrect(x0, ky, ww, kh, [0, 0, 8, 8]), ink: { indigo: 0.2, blue: 0.16 }, knock: false, grad: sinking(ky, kh, 0.1) },
+        { path: rrect(x0, ky + kh - 5, ww, 5, [0, 0, 8, 8]), ink: DARK },
+        ...blackPaths.map((path) => ({ path, ink: {} })),
+      ],
+    });
+    sticker(layers, key.shape, key.color, cx, cy, size, rng);
+  });
+
+  for (const key of BLACK_KEYS) {
+    const bx = kx + (key.after + 1) * ww - bw / 2;
+    const size = bw * 0.36;
+    const cy = ky + bh - size * 1.9;
+    hits.unshift({
+      x: bx, y: ky, w: bw, h: bh, hz: key.hz, midi: WHITE_MIDI[key.after] + 1, cx: bx + bw / 2, cy, size, color: key.color,
+      shade: [
+        { path: rrect(bx, ky, bw, bh, [0, 0, 5, 5]), ink: { indigo: 0.55, violet: 0.3 }, knock: false, grad: sinking(ky, bh, 0.1) },
+        { path: rrect(bx, ky + bh * 0.92, bw, bh * 0.08, [0, 0, 5, 5]), ink: DARK },
+      ],
+    });
+    layers.push({ path: rrect(bx + bw * 0.12, ky, bw, bh + kh * 0.02, 5), ink: { indigo: 0.35, blue: 0.1 }, knock: false, blur: 4 });
+    layers.push({ path: rrect(bx, ky, bw, bh, [0, 0, 5, 5]), ink: DARK });
+    // Gloss down the left edge and a lighter front bevel.
+    layers.push({ path: rrect(bx + bw * 0.1, ky, bw * 0.1, bh * 0.9, 3), ink: { indigo: 0.6, violet: 0.25 } });
+    layers.push({ path: rrect(bx, ky + bh * 0.92, bw, bh * 0.08, [0, 0, 5, 5]), ink: { indigo: 0.75, violet: 0.4 } });
+    if (key.shape) sticker(layers, key.shape, key.color, bx + bw / 2, cy, size, rng);
+  }
+}
+
+function compose(W, H) {
+  const layers = [], hits = [];
+  const rng = rngFor('picture');
+  const M = Math.max(16, Math.min(W, H) * 0.03);
+  const portrait = W < H * 0.9;
+  const tutH = H * (portrait ? 0.5 : 0.44);
+
+  layers.push({ path: rrect(M, M, W - M * 2, tutH - M, 18), ink: { violet: 0.4, blue: 0.06 } });
+  const p = M * 0.8, gap = M * 0.7;
+  const ix = M + p, iy = M + p, iw = W - M * 2 - p * 2, ih = tutH - M - p * 2;
+  const cards = portrait
+    ? [{ x: ix, y: iy, w: iw, h: (ih - gap) / 2 }, { x: ix, y: iy + (ih + gap) / 2, w: iw, h: (ih - gap) / 2 }]
+    : [{ x: ix, y: iy, w: (iw - gap) / 2, h: ih }, { x: ix + (iw + gap) / 2, y: iy, w: (iw - gap) / 2, h: ih }];
+  notesCard(layers, cards[0], 'Playful and sparkly', LINE1, rng, true);
+  notesCard(layers, cards[1], 'Use 8 notes from your keyboard.', LINE2, rng, false);
+
+  keyboard(layers, { x: M, y: tutH + M, w: W - M * 2, h: H - tutH - M * 2 }, rng, hits);
+  return { layers, hits };
+}
+
+/* ── printing ───────────────────────────────────────────────────────────── */
+
+function drawLayer(g, L, knockPass) {
+  g.fillStyle = !knockPass && L.grad ? L.grad(g) : '#000';
+  g.strokeStyle = '#000';
+  g.save();
+  if (L.clip) g.clip(L.clip);
+  g.filter = L.blur ? `blur(${L.blur * DPR}px)` : 'none';
+  if (L.dx || L.dy) g.translate(L.dx || 0, L.dy || 0);
+  if (L.text) {
+    g.font = L.font;
+    g.textAlign = L.align || 'center';
+    g.fillText(L.text, L.x, L.y);
+  } else if (L.stroke) {
+    g.lineWidth = L.stroke;
+    g.lineCap = g.lineJoin = 'round';
+    g.stroke(L.path);
+  } else {
+    g.fill(L.path);
+  }
+  g.restore();
+}
+
+function paintPlate(g, ink, layers) {
+  for (const L of layers) {
+    if (L.knock !== false) {
+      g.globalCompositeOperation = 'destination-out';
+      g.globalAlpha = L.knockAlpha ?? 1;
+      drawLayer(g, L, true);
+      g.globalCompositeOperation = 'source-over';
+    }
+    const t = L.ink[ink];
+    if (t) {
+      g.globalAlpha = t;
+      drawLayer(g, L, false);
+    }
+  }
+}
+
+function tinted(cover, ink) {
+  const tint = cv(cover.width, cover.height), t = tint.getContext('2d');
+  t.drawImage(cover, 0, 0);
+  t.globalCompositeOperation = 'source-in';
+  t.fillStyle = INK[ink];
+  t.fillRect(0, 0, tint.width, tint.height);
+  return tint;
+}
+
+/* A key's pressed state is printed once, like the picture, into a small
+   bitmap that multiplies over it. Its screen is anchored to the canvas so the
+   dots line up with the print beneath; the animation only fades it in and out,
+   because moving or scaling a halftone makes the texture swim. */
+function bakeOverlay(k) {
+  const pad = 4;
+  const bx = Math.floor((k.x - pad) * DPR), by = Math.floor((k.y - pad) * DPR);
+  const w = Math.ceil((k.w + pad * 2) * DPR), h = Math.ceil((k.h + pad * 2) * DPR);
+  const out = cv(w, h), o = out.getContext('2d');
+  o.fillStyle = '#fff';
+  o.fillRect(0, 0, w, h);
+  const cover = cv(w, h), g = cover.getContext('2d');
+  for (const ink of Object.keys(INK)) {
+    if (!k.shade.some((L) => L.ink[ink])) continue;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, w, h);
+    g.setTransform(DPR, 0, 0, DPR, -bx, -by);
+    paintPlate(g, ink, k.shade);
+    screenPlate(cover, ink, bx, by);
+    o.globalCompositeOperation = 'multiply';
+    o.drawImage(tinted(cover, ink), REG[ink][0] * DPR, REG[ink][1] * DPR);
+  }
+  k.overlay = { canvas: out, x: bx, y: by };
+  k.p = 0;
+}
+
+let hits = [];
+let base = null;
+
+function print() {
+  stopSong();
+  const W = innerWidth, H = innerHeight;
+  const canvas = document.getElementById('c');
+  const bw = Math.round(W * DPR), bh = Math.round(H * DPR);
+  canvas.width = bw; canvas.height = bh;
+  const o = canvas.getContext('2d');
+  paintPaper(o, bw, bh);
+
+  const pic = compose(W, H);
+  hits = pic.hits;
+  const cover = cv(bw, bh), g = cover.getContext('2d');
+  for (const ink of Object.keys(INK)) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, bw, bh);
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    paintPlate(g, ink, pic.layers);
+    starve(g, rngFor('starve:' + ink));
+    screenPlate(cover, ink);
+    o.globalCompositeOperation = 'multiply';
+    o.drawImage(tinted(cover, ink), REG[ink][0] * DPR, REG[ink][1] * DPR);
+    o.globalCompositeOperation = 'source-over';
+  }
+  base = cv(bw, bh);
+  base.getContext('2d').drawImage(canvas, 0, 0);
+  hits.forEach(bakeOverlay);
+  held.clear();
+  sparks.length = 0;
+}
+
+const PRESS_MS = 60, RELEASE_MS = 140, SPARK_MS = 650;
+const held = new Map();
+const sparks = [];
+let last = 0, running = false;
+
+function frame() {
+  const now = performance.now();
+  const dt = last ? now - last : 16;
+  last = now;
+  const o = document.getElementById('c').getContext('2d');
+  o.globalCompositeOperation = 'source-over';
+  o.globalAlpha = 1;
+  o.drawImage(base, 0, 0);
+  if (auto) stepSong(now);
+  o.globalCompositeOperation = 'multiply';
+  let busy = false;
+  // Draw black keys last so a pressed white key's shade never covers them.
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const k = hits[i];
+    k.p = Math.min(1, Math.max(0, k.p + (k.down ? dt / PRESS_MS : -dt / RELEASE_MS)));
+    if (k.p > 0) {
+      o.globalAlpha = k.p;
+      o.drawImage(k.overlay.canvas, k.overlay.x, k.overlay.y);
+    }
+    if (k.p > 0 && !k.down) busy = true;
+  }
+  // A ring of ink dots bursts from the sticker, like the note leaving the key.
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const sp = sparks[i];
+    sp.t0 ??= now;
+    const age = (now - sp.t0) / SPARK_MS;
+    if (age >= 1) { sparks.splice(i, 1); continue; }
+    busy = true;
+    const ease = 1 - (1 - age) ** 3;
+    const r = sp.size * (1.4 + 2.2 * ease);
+    o.globalAlpha = 1 - age;
+    o.fillStyle = sp.ink;
+    for (let j = 0; j < 12; j++) {
+      const a = j / 12 * Math.PI * 2 + sp.spin;
+      o.beginPath();
+      o.arc((sp.cx + Math.cos(a) * r) * DPR, (sp.cy + Math.sin(a) * r) * DPR, (0.8 + 2.4 * (1 - age)) * DPR, 0, Math.PI * 2);
+      o.fill();
+    }
+  }
+  o.globalAlpha = 1;
+  o.globalCompositeOperation = 'source-over';
+  if (busy || held.size || auto) requestAnimationFrame(frame);
+  else { running = false; last = 0; }
+}
+
+function kick() {
+  if (!running) { running = true; requestAnimationFrame(frame); }
+}
+
+let audio;
+function play(hz) {
+  audio ??= new AudioContext();
+  const t = audio.currentTime;
+  const env = audio.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(0.4, t + 0.005);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+  env.connect(audio.destination);
+  for (const [mult, level] of [[1, 1], [2, 0.4], [3, 0.2]]) {
+    const osc = audio.createOscillator(), g = audio.createGain();
+    osc.frequency.value = hz * mult;
+    g.gain.value = level;
+    osc.connect(g).connect(env);
+    osc.start(t);
+    osc.stop(t + 1.2);
+  }
+}
+
+function press(k) {
+  k.down = true;
+  // The two plain black keys go down but make no sound, like the real toy.
+  if (k.hz) {
+    play(k.hz);
+    sparks.push({ cx: k.cx, cy: k.cy, size: k.size, ink: INK[Object.keys(STICKER[k.color])[0]], spin: Math.random() });
+  }
+  kick();
+}
+
+function release(k) {
+  k.down = false;
+  kick();
+}
+
+const button = document.getElementById('play');
+let auto = null;
+
+function startSong() {
+  auto = { t0: null, next: 0, sounding: [] };
+  button.textContent = '■ Stop';
+  kick();
+}
+
+function stopSong() {
+  if (!auto) return;
+  auto.sounding.forEach(({ k }) => release(k));
+  auto = null;
+  button.textContent = '▶ Play';
+}
+
+function stepSong(now) {
+  auto.t0 ??= now;
+  const t = (now - auto.t0) / 1000;
+  for (const n of auto.sounding) if (t >= n.off) release(n.k);
+  auto.sounding = auto.sounding.filter((n) => t < n.off);
+  while (auto.next < SONG.length && SONG[auto.next][0] <= t) {
+    const [start, len, midi] = SONG[auto.next++];
+    const k = hits.find((h) => h.midi === midi);
+    press(k);
+    // Lift a little early so repeated notes visibly come up between presses.
+    auto.sounding.push({ k, off: start + len * 0.75 });
+  }
+  if (auto.next === SONG.length && !auto.sounding.length) stopSong();
+}
+
+button.addEventListener('click', () => (auto ? stopSong() : startSong()));
+
+const canvas = document.getElementById('c');
+canvas.addEventListener('pointerdown', (e) => {
+  const k = hits.find((r) => e.clientX >= r.x && e.clientX < r.x + r.w && e.clientY >= r.y && e.clientY < r.y + r.h);
+  if (!k) return;
+  canvas.setPointerCapture(e.pointerId);
+  held.set(e.pointerId, k);
+  press(k);
+});
+for (const ev of ['pointerup', 'pointercancel']) {
+  canvas.addEventListener(ev, (e) => {
+    const k = held.get(e.pointerId);
+    if (!k) return;
+    held.delete(e.pointerId);
+    release(k);
+  });
+}
+
+let timer;
+addEventListener('resize', () => { clearTimeout(timer); timer = setTimeout(print, 250); });
+print();
+</script>
+</body>
+</html>
