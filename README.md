@@ -1,6 +1,6 @@
-# Sugar Plum Keyboard
+# The Dance of the Sugar Plum Fairy (Toy Piano Animation)
 
-A risograph-style web rendition of a children's toy piano and its "Dance of the Sugar Plum Fairy" lesson page.
+A risograph-style web rendition of based on 'The Story Orchestra' children's toy piano and its "Dance of the Sugar Plum Fairy" lesson page.
 Click the keys to play them at the real toy's pitches, or press Play to hear the song from the intro to line 8 with each key animating in time.
 
 ![The rendition: the book's Sugar Plum tutorial above the toy keyboard](docs/snapshot.png)
@@ -21,10 +21,12 @@ The keys follow the normal piano pattern (C D E F G A B C D, with black keys in 
 
 1. **Record.** The toy sat next to a MacBook and each of the 15 keys was pressed in order, about two seconds apart, while `ffmpeg` recorded the built-in microphone.
 2. **Find each note.** The recording was split into 10 ms slices and the loudness of each measured. A key press is a sudden jump in volume. The toy's notes also wobble in volume as they ring (below), so a new note only counts when the volume jumps at least 3× within 30 ms.
-3. **Measure the pitch.** A Fourier transform splits each note into the frequencies it contains. The toy's tone is buzzy, so its strongest frequency is sometimes a harmonic rather than the note itself. A *harmonic product spectrum* fixes that: the spectrum is multiplied by copies of itself squeezed to ½ and ⅓ width, and only the true note lines up in all three.
+3. **Measure the pitch.** A Fourier transform splits each note into the frequencies it contains. The toy's tone is buzzy, so its strongest frequency is sometimes a harmonic rather than the note itself. On the Purple dot and Orange star keys, the loudest peak is an octave too high. A *harmonic product spectrum* fixes that: the spectrum is multiplied by copies of itself squeezed to ½ and ⅓ width, and only the true note lines up in all three (below).
 4. **Name the note.** With A4 = 440 Hz, the note number is `69 + 12 × log₂(Hz ÷ 440)`. The whole number gives the note name and octave, and the remainder gives how far out of tune it is in cents.
 
 ![The key recording, its volume, and a close-up of one note's volume wobble](docs/key-volume.png)
+
+![The Purple dot's spectrum, the squeezed copies, and their product picking out 991 Hz](docs/fourier.png)
 
 | Sticker | Note | Measured | Sticker | Note | Measured |
 |---|---|---|---|---|---|
