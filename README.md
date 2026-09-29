@@ -1,6 +1,7 @@
 # The Dance of the Sugar Plum Fairy (Toy Piano Animation)
 
-A risograph-style web rendition of based on 'The Story Orchestra' children's toy piano and its "Dance of the Sugar Plum Fairy" lesson page.
+A risograph-style web rendition of the 'The Story Orchestra' children's toy piano and its "Dance of the Sugar Plum Fairy" lesson.
+
 Click the keys to play them at the real toy's pitches, or press Play to hear the song from the intro to line 8 with each key animating in time.
 
 ![The rendition: the book's Sugar Plum tutorial above the toy keyboard](docs/snapshot.png)
