@@ -8,6 +8,43 @@ Click the keys to play them at the real toy's pitches, or press Play to hear the
 
 Open `toy-piano-print.html` in a desktop browser to try it. There is nothing to install.
 
+## The song
+
+The Sugar Plum Fairy from the intro to line 8, written in the toy's stickers.
+
+**Key:** 🔴⭐ Red star · 🩷 Pink · 🟣 Purple dot · 🔷 Blue triangle · 🔵 Light blue · 🟢▲ Green triangle · 🟢 Green dot · 🟡 Yellow · 🟠 Orange dot\
+**Rhythm:** *q* = quick · *m* = medium · **L** = long (hold) · ( ) = pause
+
+**Intro** (twice, light and plucky)\
+( ) 🩷 · ( ) 🟣 · ( ) 🔴⭐ · ( ) 🔷\
+( ) 🩷 · ( ) 🟣 · ( ) 🔴⭐ · ( ) 🔷
+
+**Line 1** (book): *See the fairy of the sugar plum*\
+( ) 🔴⭐ *q* · 🩷 *q* · 🔴⭐ *m* · 🟣 *m* · 🔷 *m* · 🩷 *m* · 🔵 *q* · 🔵 *q* · 🔵 **L**
+
+**Line 2** (book): *Sugar plum, sugar plum, dancing all around*\
+🟢▲ *q* · 🟢▲ *q* · 🟢▲ **L** · 🟢 *q* · 🟢 *q* · 🟢 **L** · 🟡 *q* · 🩷 *q* · 🟢 *q* · 🩷 *q* · 🟡 *m* ( )
+
+**Line 3**\
+( ) 🔴⭐ *q* · 🩷 *q* · 🔴⭐ *m* · 🟣 *m* · 🟢 *m* · 🟡 *m* · 🔴⭐ *q* · 🔴⭐ *q* · 🔴⭐ **L**
+
+**Line 4**\
+🟣 *q* · 🟣 *q* · 🟣 **L** · 🩷 *q* · 🩷 *q* · 🩷 **L** · 🔷 *q* · 🟣 *q* · 🩷 *q* · 🟣 *q* · 🔷 *m* ( )
+
+**Line 5** (same as line 1)\
+( ) 🔴⭐ *q* · 🩷 *q* · 🔴⭐ *m* · 🟣 *m* · 🔷 *m* · 🩷 *m* · 🔵 *q* · 🔵 *q* · 🔵 **L**
+
+**Line 6** (same as line 2)\
+🟢▲ *q* · 🟢▲ *q* · 🟢▲ **L** · 🟢 *q* · 🟢 *q* · 🟢 **L** · 🟡 *q* · 🩷 *q* · 🟢 *q* · 🩷 *q* · 🟡 *m* ( )
+
+**Line 7** (three falling phrases)\
+( ) 🩷 *q* · 🟢▲ *q* · 🩷 *m* · 🔷 *m*\
+( ) 🔵 *q* · 🟡 *q* · 🔵 *m* · 🟢▲ *m*\
+( ) 🟢 *q* · 🟠 *q* · 🟢 *m* · 🟡 *m*
+
+**Line 8** (a quick sweep up, then land)\
+( ) 🟡 · 🔷 · 🟣 (very fast, like a ripple) → 🩷 **L**
+
 ## How this was built
 
 ### The starting point
